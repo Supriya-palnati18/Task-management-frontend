@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Task Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0-beta2/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="container mt-5">
+        <h2>Task Dashboard</h2>
+        <button class="btn btn-success mb-3" data-bs-toggle="modal" data-bs-target="#createTaskModal">Create Task</button>
+        <button class="btn btn-danger mb-3" onclick="logout()">Logout</button>
+        <div id="tasks-container">
+            <h4>Your Tasks</h4>
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Title</th>
+                        <th>Description</th>
+                        <th>Priority</th>
+                        <th>Status</th>
+                        <th>Deadline</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="tasks-list">
+                    <!-- Tasks will be dynamically inserted here -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Create Task Modal -->
+    <div class="modal fade" id="createTaskModal" tabindex="-1" aria-labelledby="createTaskModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="createTaskModalLabel">Create Task</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="create-task-form">
+                        <div class="mb-3">
+                            <label for="task-title" class="form-label">Title</label>
+                            <input type="text" class="form-control" id="task-title" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="task-description" class="form-label">Description</label>
+                            <textarea class="form-control" id="task-description" required></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label for="task-priority" class="form-label">Priority</label>
+                            <select class="form-control" id="task-priority">
+                                <option value="low">Low</option>
+                                <option value="medium">Medium</option>
+                                <option value="high">High</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="task-status" class="form-label">Status</label>
+                            <select class="form-control" id="task-status">
+                                <option value="yet-to-start">Yet-to-start</option>
+                                <option value="in-progress">In-progress</option>
+                                <option value="completed">Completed</option>
+                                <option value="hold">Hold</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="task-deadline" class="form-label">Deadline</label>
+                            <input type="date" class="form-control" id="task-deadline" required>
+                        </div>
+                        <button type="submit" class="btn btn-success">Create Task</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:8000/api/task/';
+        const token = localStorage.getItem('token');
+
+        // Redirect to login if not authenticated
+        if (!token) {
+            alert('You are not logged in!');
+            window.location.href = 'login.html';
+        }
+
+        // Fetch tasks from the API
+        async function fetchTasks() {
+            try {
+                const response = await fetch(API_URL, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to fetch tasks');
+                }
+
+                const tasks = await response.json();
+                renderTasks(tasks);
+            } catch (error) {
+                console.error(error);
+                alert('An error occurred while fetching tasks.');
+            }
+        }
+
+        // Render tasks in the table
+        function renderTasks(tasks) {
+            const tasksList = document.getElementById('tasks-list');
+            tasksList.innerHTML = ''; // Clear previous tasks
+
+            tasks.forEach(task => {
+                const row = document.createElement('tr');
+
+                row.innerHTML = `
+                    <td>${task.title}</td>
+                    <td>${task.description}</td>
+                    <td>${task.priority}</td>
+                    <td>
+                        <select class="form-select" onchange="updateStatus('${task.id}', this.value)">
+                            <option value="yet-to-start" ${task.status === 'yet-to-start' ? 'selected' : ''}>Yet-to-start</option>
+                            <option value="in-progress" ${task.status === 'in-progress' ? 'selected' : ''}>In-progress</option>
+                            <option value="completed" ${task.status === 'completed' ? 'selected' : ''}>Completed</option>
+                            <option value="hold" ${task.status === 'hold' ? 'selected' : ''}>Hold</option>
+                        </select>
+                    </td>
+                    <td>${task.deadline}</td>
+                    <td>
+                        <button class="btn btn-danger btn-sm" onclick="deleteTask('${task.id}')">Delete</button>
+                    </td>
+                `;
+                tasksList.appendChild(row);
+            });
+        }
+
+        // Update task status
+        async function updateStatus(taskId, newStatus) {
+            try {
+                const response = await fetch(`${API_URL}${taskId}/`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ status: newStatus })
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to update status');
+                }
+
+                alert('Task status updated successfully!');
+                fetchTasks(); // Refresh the task list
+            } catch (error) {
+                console.error(error);
+                alert('An error occurred while updating the task status.');
+            }
+        }
+
+        // Delete a task
+        async function deleteTask(taskId) {
+            if (!confirm('Are you sure you want to delete this task?')) return;
+
+            try {
+                const response = await fetch(`${API_URL}${taskId}/`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to delete task');
+                }
+
+                alert('Task deleted successfully!');
+                fetchTasks(); // Refresh the task list
+            } catch (error) {
+                console.error(error);
+                alert('An error occurred while deleting the task.');
+            }
+        }
+
+        // Create a new task
+        document.getElementById('create-task-form').addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            const title = document.getElementById('task-title').value;
+            const description = document.getElementById('task-description').value;
+            const priority = document.getElementById('task-priority').value;
+            const status = document.getElementById('task-status').value;
+            const deadline = document.getElementById('task-deadline').value;
+
+            try {
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ title, description, priority, status, deadline })
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to create task');
+                }
+
+                alert('Task created successfully!');
+                fetchTasks(); // Refresh the task list
+                document.getElementById('create-task-form').reset();
+                const modal = document.getElementById('createTaskModal');
+                const modalInstance = bootstrap.Modal.getInstance(modal);
+                modalInstance.hide();
+            } catch (error) {
+                console.error(error);
+                alert('An error occurred while creating the task.');
+            }
+        });
+
+        // Logout function
+        function logout() {
+            localStorage.removeItem('token');
+            alert('You have been logged out!');
+            window.location.href = 'login.html';
+        }
+
+        // Fetch tasks on page load
+        fetchTasks();
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.2/dist/umd/popper.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0-beta2/dist/js/bootstrap.min.js"></script>
+</body>
+</html>
